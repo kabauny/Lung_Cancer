@@ -9,211 +9,238 @@ Created on Tue Dec 19 16:54:36 2017
 import numpy as np
 import pandas as pd
 import statistics as stat
+import matplotlib.pyplot as plt
+
+def reList(dfList, gene):
+    short_List = []
+    
+    for dl in dfList:
+        
+        short_List += [dl[gene]]
+    
+    return short_List
+
+def centroid_class(class_series):
 
 
+    centroid_class = []
 
-class shrunkenCentroid:
+    temp_sum = 0
+    temp_length = 0
     
-    
-    def __init__(self, parent, file_list):
-        #input: parent directory and name of files for analysis
-        #initializing all necessary variables, see each function for details
+    for cs in class_series:
+        s = sum(cs)
+        l = len(cs)
         
-        self.parent = parent
-        self.file_list = file_list
-        
-        self.loadData() 
-        self.uniqueGeneNames() 
-        self.overall_centroid_List()
-        self.s_List()
-        self.s_knot = stat.median(self.sList)
-        self.mk_list()
-        
-        self.d_list()
-        self.d0 = stat.median(self.dList[0])
-        #self.d1 = stat.median(self.dList[1]) 
-        
+        centroid_class += [s/l]
 
-    def loadData(self):
-        #loads all data into dataframe dfList
-        #for miRNA Lung cancer, it loads LUAD and LUSC as dataframes each
-        #and stores to a list called dfList
+        temp_sum += s
+        temp_length += l
 
-        self.dfList = []
-        for file in self.file_list:
-            df_temp = pd.read_csv(self.parent + file)
-            del df_temp['Unnamed: 0']
-            self.dfList += [df_temp]
+    centroid_class += [temp_sum/temp_length]
+
     
+    return centroid_class
+
+def overall_centroid_List(dfList, geneList):
+    x_list = []
+    for gene in geneList:
+        newList = reList(dfList, gene)
+        x_list += [centroid_class(newList)[-1]]
     
-    def uniqueGeneNames(self):
-        self.ugn = []
-        #finds unique gene names between two data set
-        #for miRNA Lung cancer, LUAD and LUSC has different lists of miRNA
-        # that are expressed. This function finds all the common miRNA's 
-        # and the stores as the last element of ugn. 
-        # first two elements are miRNA unique LUAD and LUSC respectively
-        common = set(self.dfList[0]).intersection(self.dfList[1])
-        self.ugn += [list(set(self.dfList[0])^common)]
-        self.ugn += [list(set(self.dfList[1])^common)]
-        self.ugn += [list(common)]
-        
-  
+    return x_list
+
+def within_class_STD(class_series):
     
-    def reList(self, gene):
-        short_List = []
-        #given gene of interest, it returns the Series only for that gene 
-        # for each calss. minimizes memory usage for computations below
-        
-        for dl in self.dfList:
-            
-            short_List += [dl[gene]]
-        
-        return short_List
+    xi_list = centroid_class(class_series)
     
-    def centroid_class(self, class_series):
-        #in: given Series of genes of interest for each class, 
-        #retuns: the centroid of that gene with given class (xik), as well as 
-        #xi as the last element of the list. 
-    
-        centroid_class = []
-    
+    s_prime = 0
+    n = 0
+    k = 0
+    while k < len(xi_list) - 1:
         temp_sum = 0
-        temp_length = 0
-        
-        for cs in class_series:
-            s = sum(cs)
-            l = len(cs)
-            
-            centroid_class += [s/l]
-    
-            temp_sum += s
-            temp_length += l
-    
-        centroid_class += [temp_sum/temp_length]
-    
-        
-        return centroid_class
-    
-    
-    
-    def overall_centroid_List(self):
-        #from the dataframe of size |ugn| x |file_list|
-        # it finds xi for all genes. and stores
-        # in global variable xiList size |ugn| 
-        self.xiList = []
-        for gene in self.ugn[-1]:
-            class_series = self.reList(gene)
-            self.xiList += [self.centroid_class(class_series)[-1]]
-        
+        for xij in class_series[k]:
+            temp_sum += (xij - xi_list[k])**2
+        s_prime += temp_sum
+        n += len(class_series[k])
+        k += 1
 
-    
-    def within_class_STD(self, class_series):
-        #given the Series for a specific gene size |ugn| x |file_list|
-        # returns the within-class s, float
-        xi_list = self.centroid_class(class_series)
-        
-        s_prime = 0
-        n = 0
-        k = 0
-        while k < len(xi_list) - 1:
-            temp_sum = 0
-            for xij in class_series[k]:
-                temp_sum += (xij - xi_list[k])**2
-            s_prime += temp_sum
-            n += len(class_series[k])
-            k += 1
-    
-        s = 1/(n - k)*s_prime
-        return np.sqrt(s)
-    
-    def s_List(self):
-        #generates the within-class s for all genes 
-        #and stores as global variable sList, size |ugn| 
-        self.sList =[]
-        for g in self.ugn[-1]:
-            class_series = self.reList(g)
-            self.sList += [self.within_class_STD(class_series)]
-        
+    s = 1/(n - k)*s_prime
+    return np.sqrt(s)
 
+def s_List(dfList, geneList):
+    sList =[]
     
-    def mk_list(self):
-        #computes the mk values for the two classes and stores as list in global
-        #variable mkList size |file_list|
-        self.mkList = []
-        temp_list = []
-        temp_sum = 0
-        for dl in self.dfList:
-            temp_list += [dl.shape[0]]
-            temp_sum += dl.shape[0]
+    for g in geneList:
+        class_series = reList(dfList, g)
+        sList += [within_class_STD(class_series)]
+    
+    return sList
+
+def mk_list(dfList, gene_default):
+    mkList = []
+    temp_list = []
+    temp_sum = 0
+    for dl in dfList:
+        temp_list += [len(dl[gene_default])]
+        temp_sum += len(dl[gene_default])
+    
+    for tl in temp_list:
         
-        for tl in temp_list:
-            
-            self.mkList += [np.sqrt(1/tl + 1/temp_sum)]
+        mkList += [np.sqrt(1/tl + 1/temp_sum)]
     
+    
+    return mkList 
 
 
-    def d_class(self, class_series):
-        #input: series of specific gene. size |ugn| x |file_list|
-        #return the standarization value dik for specific gene, and class 
-        # size 1 x |file_list|
-        dClass = []
-        
-        xi_list = self.centroid_class(class_series)
-        s = self.within_class_STD(class_series)
+def d_class(class_series, s0, mk_list):
+    dClass = []
+    
+    xi_list = centroid_class(class_series)
+    s = within_class_STD(class_series)
+    i = 0
+    while i < len(xi_list) - 1:
+
+        dClass += [(xi_list[i] - xi_list[-1])/(mk_list[i]*(s + s0))]
+        i += 1
+    return dClass
+
+def d_list(df, geneList, s0, mkList):
+    
+    dList = []
+    
+    for gene in geneList:
+        class_series = reList(df, gene)
+        dList += [d_class(class_series, s0, mkList)]
+    dList = np.array(dList)
+    dList = dList.transpose()
+    dList = dList.tolist()
+    return dList 
+
+def d_prime(d, delta):
+
+    d_temp = abs(d) - delta
+    if d_temp <= 0:
+        d_temp = 0
+
+    return np.sign(d)*d_temp
+
+#def xik_prime()
+
+###############################################################################
+
+
+    
+
+
+def loadData(loc, file_List):
+    #Set up my Data, List of miRNA is stored in df.miRNA_List    
+
+    df_miRNA_LUAD = pd.read_csv(loc + file_miRNA_LUAD)
+    del df_miRNA_LUAD['Unnamed: 0']
+    
+    df_miRNA_LUSC = pd.read_csv(loc + file_miRNA_LUSC)
+    del df_miRNA_LUSC['Unnamed: 0']
+    
+    df_miRNA_List = [df_miRNA_LUAD, df_miRNA_LUSC]
+    
+    return df_miRNA_List
+    
+
+def uniqueGeneNames(df_list):
+    UGN = []
+    
+    common = set(df_list[0]).intersection(df_list[1])
+    UGN += [list(set(df_list[0])^common)]
+    UGN += [list(set(df_list[1])^common)]
+    UGN += [list(common)]
+    
+    return UGN
+
+
+###############################################################################
+parent = '/Users/zhongningchen/LungCancer/mi_RNA_Isoform_Data_nxp/miRNa'
+file_miRNA_LUAD = '/LUAD_miRNA_nxp.csv'
+file_miRNA_LUSC = '/LUSC_miRNA_nxp.csv'
+file_list = [file_miRNA_LUAD, file_miRNA_LUSC]
+df_miRNA_List = loadData(loc = parent, file_List = file_list)
+
+def initialize():
+
+    
+    ugn = uniqueGeneNames(df_miRNA_List)
+    
+    xiList = overall_centroid_List(df_miRNA_List, ugn[-1])
+    
+    sList = s_List(df_miRNA_List, ugn[-1])
+    s_knot = stat.median(sList)
+    mkList = mk_list(df_miRNA_List, ugn[-1][42])
+    
+    dList = d_list(df_miRNA_List, ugn[-1], s_knot, mkList)
+    d0 = stat.median(dList[0])
+    d1 = stat.median(dList[1])
+
+    return ugn, xiList, sList, s_knot, mkList, dList, d0, d1
+    
+
+def xikPrime(s_List, s0, mk_List, d_List, d):
+    
+    mean_df = pd.DataFrame()
+    
+    k = 0
+    while k < len(mk_List):
         i = 0
-        while i < len(xi_list) - 1:
-            dClass += [(xi_list[i] - xi_list[-1])/(self.mkList[i]*(s + self.s_knot))]
+        temp = []
+        while i < len(s_List):
+            dprime = d_prime(d_List[k][i], delta = d)
+            temp += [mk_List[k]*(s_List[i] + s0)*dprime]
+            #temp += [xi_List[i] + mk_List[k]*(s_List[i] + s0)*dprime]
             i += 1
-        
-        return dClass
+        mean_df[file_list[k]] = pd.Series(temp)
+        k += 1
     
-    def d_list(self):
-        #generates all dik for all genes as dList size = |ugn| x |file_list|
-        self.dList = []
-        
-        for gene in self.ugn[-1]:
-            class_series = self.reList(gene)
-            self.dList += [self.d_class(class_series)]
-     
-        
-        self.dList = np.array(self.dList)
-        self.dList = self.dList.transpose()
-        self.dList = self.dList.tolist()
-        
+    return mean_df
+
+
+
+
+'''
+def plot_meanDF(dmag):
     
-
-    def d_prime(self, d, delta):
-        #input: d, float,  standarization value 
-        #       delta, float, change in d 
-        #output: float of same sign as d decreased by magnitude of delta
-        d_temp = abs(d) - delta
-        if d_temp <= 0:
-            d_temp = 0
     
-        return np.sign(d)*d_temp
-
     
-    def xikPrime(self, Delta):
-        #input: Delta, float, delta as above
-        #output: df of size |ugn| x |file_list|, computes the modified mean 
-        mean_df = pd.DataFrame()
-        
-        k = 0
-        while k < len(self.mkList):
-            i = 0
-            temp = []
-            while i < len(self.sList):
-                dprime = self.d_prime(self.dList[k][i], delta = Delta)
-                temp += [self.mkList[k]*(self.sList[i] + self.s_knot)*dprime]
-                #temp += [self.xiList[i] + self.mkList[k]*(self.sList[i] + self.s_knot)*dprime]
-                i += 1
-            mean_df[self.file_list[k]] = pd.Series(temp)
-            k += 1
-        
-        return mean_df
+    meanDF = xikPrime(s_List = sList, s0 = s_knot, mk_List = mkList, d_List = dList, d = d0*dmag)
+    
+    
+    fig = plt.figure(figsize = (12,6))
+    v_LUAD = fig.add_subplot(121)
+    t = range(meanDF.shape[0])
+    v_LUAD.vlines(t,[0], meanDF[file_list[0]])
+    v_LUAD.set_xlabel('genes expressed')
+    v_LUAD.set_title('LUAD miRNA Expression')
+    
+    fig = plt.figure(figsize = (12,6))
+    v_LUSC = fig.add_subplot(121)
+    t = range(meanDF.shape[0])
+    v_LUSC.vlines(t,[0], meanDF[file_list[1]])
+    v_LUSC.set_xlabel('genes expressed')
+    v_LUSC.set_title('LUSC miRNA Expression')
+    
+    plt.show()
+    
+    plt.savefig('LUAD_LUSC_miRNA_' + str(d0*dmag) + '.png')
 
 
+def plot_meanDF_series(n, inc):
+    
+    for i in range(n):
+        plot_meanDF((i + 1)*inc)
+    
+    return None
 
+ugn, xiList, sList, s_knot, mkList, dList, d0, d1 = initialize()
+
+plot_meanDF_series(5, 25)
+'''
 
 
