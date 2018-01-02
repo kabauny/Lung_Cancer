@@ -143,3 +143,16 @@ def oneFoldValidation(delta):
         n += testList[classes].shape[0]    
         
     return temp/n
+
+parent = '/Users/zhongningchen/LungCancer/mi_RNA_Isoform_Data_nxp/miRNa'
+file_miRNA_LUAD = '/LUAD_miRNA_nxp.csv'
+file_miRNA_LUSC = '/LUSC_miRNA_nxp.csv'
+file_list = [file_miRNA_LUAD, file_miRNA_LUSC]
+dfList = loadData(parent, file_list)
+
+i = 0
+result = []
+while i < 7:
+    result += [i*5, crossValidation(fold = 10, delta = i*5)]
+    print ('Done with ' + str(i*5))
+    i += 1
