@@ -6,7 +6,34 @@ import math
 
 
 from sklearn.model_selection import train_test_split
+def combined():
+    #loads all data into dataframe dfList
+    #for miRNA Lung cancer, it loads LUAD and LUSC as dataframes each
+    #and stores to a list called dfList
 
+    dfList = []
+    label = []
+    for file in file_list:
+        df_temp = pd.read_csv(parent + file)
+        del df_temp['Unnamed: 0']
+        del df_temp['label']
+        
+        temp_dict = {}
+        for i in range(len(df_temp['name'])):
+            temp_dict[i] = df_temp['name'][i]
+        df_temp = df_temp.rename(index = temp_dict)
+        
+        del df_temp['name']
+        
+
+        dfList += [df_temp.transpose()]
+        label += [file]*len(df_temp.transpose())
+        
+    DF = pd.concat(dfList)
+    DF = DF.fillna(0)
+    
+
+    return DF, pd.DataFrame(label)
 def loadData2(parent, file_list):
     #loads all data into dataframe dfList
     #for miRNA Lung cancer, it loads LUAD and LUSC as dataframes each
@@ -156,3 +183,7 @@ while i < 7:
     result += [i*5, crossValidation(fold = 10, delta = i*5)]
     print ('Done with ' + str(i*5))
     i += 1
+    
+df, y = combined()
+df.to_csv('/Users/zhongningchen/LungCancer/Data')
+y.to_csv('/Users/zhongningchen/LungCancer/Label')
